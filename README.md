@@ -177,7 +177,7 @@ pnpm lint      # lint & typecheck
 
 ## 📄 License
 
-MIT — see `LICENSE`.
+Apache License 2.0 — see `LICENSE`.
 
 ---
 
