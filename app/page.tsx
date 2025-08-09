@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,13 +16,13 @@ import { resizeImageToMax1024 } from '@/lib/resize';
 import { sha256 } from '@/lib/hash';
 import { downloadAgencyCSV } from '@/lib/csv';
 import { saveHistoryItem, loadHistory, saveApiKey, getApiKey } from '@/lib/store';
-import type { FileType, GenSettings, ItemMetaBox, MetaOutput } from '@/lib/types';
+import type { FileType, ItemMetaBox, MetaOutput } from '@/lib/types';
 
 const OPENAI_MODELS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1']; // vision-capable first
 const GEMINI_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
-
 const DEFAULT_EXTRA = '';
 
+// ---------- instruction text ----------
 function defaultInstruction(opts: {
   fileType: FileType;
   titleLength: number;
@@ -72,11 +72,11 @@ function sleep(ms: number) {
 }
 
 async function withRetry<T>(fn: () => Promise<T>, tries = 3, backoffMs = 600): Promise<T> {
-  let last: any;
+  let last: unknown;
   for (let t = 0; t < tries; t++) {
     try {
       return await fn();
-    } catch (e) {
+    } catch (e: unknown) {
       last = e;
       if (t < tries - 1) await sleep(backoffMs * (t + 1));
     }
@@ -84,8 +84,9 @@ async function withRetry<T>(fn: () => Promise<T>, tries = 3, backoffMs = 600): P
   throw last;
 }
 
-function isValidMeta(x: any): x is MetaOutput {
-  return x && typeof x.title === 'string' && typeof x.description === 'string' && typeof x.keywords === 'string';
+function isValidMeta(x: unknown): x is MetaOutput {
+  const obj = x as Partial<MetaOutput> | null;
+  return !!obj && typeof obj.title === 'string' && typeof obj.description === 'string' && typeof obj.keywords === 'string';
 }
 
 async function pLimit<T>(
@@ -149,9 +150,14 @@ export default function App() {
     setModel(provider === 'openai' ? OPENAI_MODELS[0] : GEMINI_MODELS[0]);
   }, [provider]);
 
+  const refreshHistory = useCallback(async () => {
+    const h = await loadHistory(histPage, pageSize);
+    setHist(h);
+  }, [histPage, pageSize]);
+
   useEffect(() => {
-    if (tab === 'history') refreshHistory();
-  }, [tab, histPage]);
+    if (tab === 'history') void refreshHistory();
+  }, [tab, refreshHistory]);
 
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -161,11 +167,6 @@ export default function App() {
   function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const fl = Array.from(e.target.files || []).filter((f) => f.type.startsWith('image/'));
     setFiles((prev) => [...prev, ...fl]);
-  }
-
-  async function refreshHistory() {
-    const h = await loadHistory(histPage, pageSize);
-    setHist(h);
   }
 
   async function runGeneration() {
@@ -189,7 +190,7 @@ export default function App() {
           model,
           instruction: instr,
           instructionHash,
-          imageDataUrl: dataUrl,
+          imageDataUrl: dataUrl
         };
         const url = provider === 'openai' ? '/api/generate/openai' : '/api/generate/gemini';
 
@@ -198,7 +199,7 @@ export default function App() {
             fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(body),
+              body: JSON.stringify(body)
             }).then(async (r) => {
               if (!r.ok) {
                 const t = await r.text();
@@ -210,8 +211,8 @@ export default function App() {
           600
         );
 
-        const json = (await res.json()) as any;
-        if (!isValidMeta(json)) {
+        const parsed: unknown = await res.json();
+        if (!isValidMeta(parsed)) {
           throw new Error('Model returned invalid JSON shape.');
         }
 
@@ -221,17 +222,18 @@ export default function App() {
           fileType,
           createdAt: Date.now(),
           thumbDataUrl: dataUrl,
-          meta: json as MetaOutput,
+          meta: parsed
         };
         await saveHistoryItem(box);
         return box;
-      } catch (e: any) {
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
         const box: ItemMetaBox = {
           id: nanoid(),
           filename: file.name,
           fileType,
           createdAt: Date.now(),
-          error: e?.message || String(e),
+          error: msg
         };
         await saveHistoryItem(box);
         return box;
@@ -243,7 +245,7 @@ export default function App() {
     await pLimit<ItemMetaBox>(4, tasks, (ret) => {
       const done = ret.filter(Boolean).length;
       setProgress(Math.round((done / files.length) * 100));
-      setItems((ret.filter(Boolean) as ItemMetaBox[]));
+      setItems(ret.filter(Boolean) as ItemMetaBox[]);
     });
 
     setBusy(false);
@@ -251,7 +253,7 @@ export default function App() {
   }
 
   function copy(text: string) {
-    navigator.clipboard.writeText(text || '');
+    void navigator.clipboard.writeText(text || '');
   }
 
   const totalPages = Math.ceil(hist.total / pageSize);
@@ -263,7 +265,7 @@ export default function App() {
         <h1 className="text-xl md:text-2xl font-semibold">Stock Image Metadata Generator</h1>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as 'generate' | 'history')}>
         <TabsList className="grid grid-cols-2 w-full md:w-auto">
           <TabsTrigger value="generate">Generate</TabsTrigger>
           <TabsTrigger value="history">
@@ -280,7 +282,7 @@ export default function App() {
             <CardContent className="grid md:grid-cols-3 gap-4">
               <div>
                 <Label>Provider</Label>
-                <Select value={provider} onValueChange={(v) => setProvider(v as any)}>
+                <Select value={provider} onValueChange={(v) => setProvider(v as 'openai' | 'gemini')}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -349,7 +351,7 @@ export default function App() {
                   min={20}
                   max={80}
                   value={titleLength}
-                  onChange={(e) => setTitleLength(parseInt(e.target.value || '60'))}
+                  onChange={(e) => setTitleLength(parseInt(e.target.value || '60', 10))}
                 />
               </div>
               <div>
@@ -359,7 +361,7 @@ export default function App() {
                   min={20}
                   max={120}
                   value={descriptionLength}
-                  onChange={(e) => setDescriptionLength(parseInt(e.target.value || '60'))}
+                  onChange={(e) => setDescriptionLength(parseInt(e.target.value || '60', 10))}
                 />
               </div>
               <div>
@@ -369,7 +371,7 @@ export default function App() {
                   min={5}
                   max={50}
                   value={keywordsCount}
-                  onChange={(e) => setKeywordsCount(parseInt(e.target.value || '49'))}
+                  onChange={(e) => setKeywordsCount(parseInt(e.target.value || '49', 10))}
                 />
               </div>
               <div className="md:col-span-2">
@@ -455,16 +457,14 @@ export default function App() {
                       <div className="flex gap-3 p-3 items-center bg-neutral-900">
                         <div className="w-16 h-16 bg-neutral-800 rounded-lg overflow-hidden flex items-center justify-center">
                           {it.thumbDataUrl ? (
-                            <img src={it.thumbDataUrl} className="object-cover w-full h-full" />
+                            <img alt="" src={it.thumbDataUrl} className="object-cover w-full h-full" />
                           ) : (
                             <span className="text-xs text-neutral-500">No preview</span>
                           )}
                         </div>
                         <div className="min-w-0">
                           <div className="font-medium truncate">{it.filename}</div>
-                          <div className="text-xs text-neutral-400">
-                            {new Date(it.createdAt).toLocaleString()}
-                          </div>
+                          <div className="text-xs text-neutral-400">{new Date(it.createdAt).toLocaleString()}</div>
                         </div>
                         {it.error && <Badge variant="destructive" className="ml-auto">Error</Badge>}
                       </div>
@@ -517,16 +517,14 @@ export default function App() {
                     <div className="flex gap-3 p-3 items-center bg-neutral-900">
                       <div className="w-16 h-16 bg-neutral-800 rounded-lg overflow-hidden flex items-center justify-center">
                         {it.thumbDataUrl ? (
-                          <img src={it.thumbDataUrl} className="object-cover w-full h-full" />
+                          <img alt="" src={it.thumbDataUrl} className="object-cover w-full h-full" />
                         ) : (
                           <span className="text-xs text-neutral-500">No preview</span>
                         )}
                       </div>
                       <div className="min-w-0">
                         <div className="font-medium truncate">{it.filename}</div>
-                        <div className="text-xs text-neutral-400">
-                          {new Date(it.createdAt).toLocaleString()}
-                        </div>
+                        <div className="text-xs text-neutral-400">{new Date(it.createdAt).toLocaleString()}</div>
                       </div>
                       {it.error && <Badge variant="destructive" className="ml-auto">Error</Badge>}
                     </div>

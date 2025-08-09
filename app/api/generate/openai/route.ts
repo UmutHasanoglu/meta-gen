@@ -17,7 +17,13 @@ const instructionCache = new Map<string, string>();
 
 export async function POST(req: NextRequest) {
   try {
-    const { apiKey, model, instruction, instructionHash, imageDataUrl } = await req.json();
+    const { apiKey, model, instruction, instructionHash, imageDataUrl } = (await req.json()) as {
+      apiKey: string;
+      model: string;
+      instruction?: string;
+      instructionHash?: string;
+      imageDataUrl: string; // data URL
+    };
 
     if (!apiKey) return new Response('Missing apiKey', { status: 400 });
     if (!model) return new Response('Missing model', { status: 400 });
@@ -26,11 +32,11 @@ export async function POST(req: NextRequest) {
     if (instruction && instructionHash && !instructionCache.has(instructionHash)) {
       instructionCache.set(instructionHash, instruction);
     }
-    const sys = instructionCache.get(instructionHash) || instruction || '';
+    const sys = instructionCache.get(instructionHash ?? '') ?? instruction ?? '';
 
     const payload = {
       model,                     // e.g., "gpt-4o"
-      instructions: sys,         // system prompt (preferred)
+      instructions: sys,         // system prompt
       text: {                    // Structured Outputs location
         format: {
           type: 'json_schema',
@@ -65,11 +71,16 @@ export async function POST(req: NextRequest) {
       return new Response(`OpenAI error (${resp.status}): ${bodyText}`, { status: 500 });
     }
 
-    const json = JSON.parse(bodyText);
+    const json = JSON.parse(bodyText) as {
+      output_text?: string;
+      output?: { content?: { text?: string }[] }[];
+    };
     const out = json.output_text ?? json.output?.[0]?.content?.[0]?.text ?? bodyText;
+
     return new Response(out, { headers: { 'Content-Type': 'application/json' } });
-  } catch (e: any) {
-    console.error('Server error', e);
-    return new Response(`Server error: ${e?.message || e}`, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('Server error', msg);
+    return new Response(`Server error: ${msg}`, { status: 500 });
   }
 }

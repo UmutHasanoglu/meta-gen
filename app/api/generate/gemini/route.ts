@@ -22,7 +22,13 @@ function parseDataUrl(dataUrl: string): { mime: string; base64: string } {
 
 export async function POST(req: NextRequest) {
   try {
-    const { apiKey, model, instruction, instructionHash, imageDataUrl } = await req.json();
+    const { apiKey, model, instruction, instructionHash, imageDataUrl } = (await req.json()) as {
+      apiKey: string;
+      model: string;
+      instruction?: string;
+      instructionHash?: string;
+      imageDataUrl: string; // data URL
+    };
 
     if (!apiKey) return new Response('Missing apiKey', { status: 400 });
     if (!model) return new Response('Missing model', { status: 400 });
@@ -31,11 +37,11 @@ export async function POST(req: NextRequest) {
     if (instruction && instructionHash && !instructionCache.has(instructionHash)) {
       instructionCache.set(instructionHash, instruction);
     }
-    const sys = instructionCache.get(instructionHash) || instruction || '';
+    const sys = instructionCache.get(instructionHash ?? '') ?? instruction ?? '';
 
     const { mime, base64 } = parseDataUrl(imageDataUrl);
 
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       ...(sys ? { systemInstruction: { role: 'user', parts: [{ text: sys }] } } : {}),
       contents: [
         {
@@ -70,20 +76,23 @@ export async function POST(req: NextRequest) {
       return new Response(`Gemini error (${resp.status}): ${text}`, { status: 500 });
     }
 
-    let out = '';
+    // When responseMimeType=application/json, Gemini returns JSON text in parts[0].text
     try {
-      const json = JSON.parse(text);
+      const json = JSON.parse(text) as {
+        candidates?: { content?: { parts?: { text?: string; inline_data?: { data?: string } }[] } }[];
+      };
       const candidateText =
         json.candidates?.[0]?.content?.parts?.[0]?.text ??
         json.candidates?.[0]?.content?.parts?.[0]?.inline_data?.data;
-      out = typeof candidateText === 'string' ? candidateText : text;
+      const out = typeof candidateText === 'string' ? candidateText : text;
+      return new Response(out, { headers: { 'Content-Type': 'application/json' } });
     } catch {
-      out = text;
+      // already JSON string
+      return new Response(text, { headers: { 'Content-Type': 'application/json' } });
     }
-
-    return new Response(out, { headers: { 'Content-Type': 'application/json' } });
-  } catch (e: any) {
-    console.error('Server error', e);
-    return new Response(`Server error: ${e?.message || e}`, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('Server error', msg);
+    return new Response(`Server error: ${msg}`, { status: 500 });
   }
 }
