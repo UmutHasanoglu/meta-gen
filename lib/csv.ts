@@ -1,3 +1,4 @@
+// lib/csv.ts
 import type { ItemMetaBox } from './types';
 
 export type Agency = 'adobe'|'shutterstock'|'vecteezy'|'freepik'|'dreamstime';
@@ -7,8 +8,9 @@ function csvEscape(val: string): string {
   return `"${s}"`;
 }
 function toCSV(headers: string[], rows: Record<string, string>[]): string {
-  const headerLine = headers.map(csvEscape).join(',');
+  const headerLine = headers.join(',');
   const lines = rows.map(r => headers.map(h => csvEscape(r[h] ?? '')).join(','));
+  // CRLF as most marketplaces expect
   return [headerLine, ...lines].join('\r\n');
 }
 
@@ -28,13 +30,15 @@ export function downloadAgencyCSV(agency: Agency, items: ItemMetaBox[]) {
   let rows: Record<string,string>[];
 
   switch (agency) {
+    // Official Adobe header (Category, Releases left empty)
     case 'adobe':
-      headers = ['Filename','Title','Keywords','Category'];
+      headers = ['Filename','Title','Keywords','Category','Releases'];
       rows = items.map(it => ({
         Filename: it.filename,
         Title: it.meta?.title ?? '',
         Keywords: it.meta?.keywords ?? '',
-        Category: '' // optional numeric
+        Category: '',
+        Releases: ''
       }));
       break;
 
