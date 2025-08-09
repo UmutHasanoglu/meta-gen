@@ -1,6 +1,0 @@
-{
-  "functions": {
-    "app/api/generate/openai/route.ts": { "runtime": "edge" },
-    "app/api/generate/gemini/route.ts": { "runtime": "edge" }
-  }
-}
