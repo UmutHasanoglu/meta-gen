@@ -10,7 +10,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Download, ImageIcon, History as HistoryIcon, RotateCw, Save, Wand2, CheckSquare, Square } from 'lucide-react';
+import {
+  Copy,
+  Download,
+  ImageIcon,
+  History as HistoryIcon,
+  RotateCw,
+  Save,
+  Wand2,
+  CheckSquare,
+  Square,
+  Plus,
+} from 'lucide-react';
 import { nanoid } from 'nanoid/non-secure';
 import { resizeImageToMax1024 } from '@/lib/resize';
 import { sha256 } from '@/lib/hash';
@@ -19,11 +30,12 @@ import { saveHistoryItem, loadHistory, saveApiKey, getApiKey } from '@/lib/store
 import { cleanKeywords, parseKeywords } from '@/lib/keywords';
 import type { FileType, ItemMetaBox, MetaOutput } from '@/lib/types';
 
+/* ---------- constants ---------- */
 const OPENAI_MODELS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1'];
 const GEMINI_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
 const DEFAULT_EXTRA = '';
 
-// ---------- instruction text ----------
+/* ---------- instruction text ---------- */
 function defaultInstruction(opts: {
   fileType: FileType;
   titleLength: number;
@@ -67,7 +79,7 @@ Example JSON output:
 }`;
 }
 
-// ---------- helpers: retry, concurrency, validation ----------
+/* ---------- helpers: retry, concurrency, validation ---------- */
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -115,7 +127,8 @@ async function pLimit<T>(
     run();
   });
 }
-// -------------------------------------------------------------
+
+/* ---------- custom file picker (accessible) ---------- */
 function FilePicker({ onPick }: { onPick: (files: File[]) => void }) {
   const id = useId();
   return (
@@ -139,6 +152,8 @@ function FilePicker({ onPick }: { onPick: (files: File[]) => void }) {
     </div>
   );
 }
+
+/* ============================== PAGE ============================== */
 export default function App() {
   const [provider, setProvider] = useState<'openai' | 'gemini'>('openai');
   const [model, setModel] = useState(OPENAI_MODELS[0]);
@@ -162,6 +177,9 @@ export default function App() {
   const [hist, setHist] = useState<{ items: ItemMetaBox[]; total: number }>({ items: [], total: 0 });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // small input value for adding keyword per-item
+  const [newKw, setNewKw] = useState<Record<string, string>>({});
+
   useEffect(() => {
     setApiKey(getApiKey(provider));
     setModel(provider === 'openai' ? OPENAI_MODELS[0] : GEMINI_MODELS[0]);
@@ -180,10 +198,6 @@ export default function App() {
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
     const fl = Array.from(e.dataTransfer.files || []).filter((f) => f.type.startsWith('image/'));
-    setFiles((prev) => [...prev, ...fl]);
-  }
-  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const fl = Array.from(e.target.files || []).filter((f) => f.type.startsWith('image/'));
     setFiles((prev) => [...prev, ...fl]);
   }
 
@@ -211,7 +225,7 @@ export default function App() {
             fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(body)
+              body: JSON.stringify(body),
             }).then(async (r) => {
               if (!r.ok) throw new Error((await r.text()) || `HTTP ${r.status}`);
               return r;
@@ -226,7 +240,7 @@ export default function App() {
         const fixed: MetaOutput = {
           title: parsed.title,
           description: parsed.description,
-          keywords: cleanKeywords(parsed.keywords, keywordsCount)
+          keywords: cleanKeywords(parsed.keywords, keywordsCount),
         };
 
         const box: ItemMetaBox = {
@@ -235,7 +249,7 @@ export default function App() {
           fileType,
           createdAt: Date.now(),
           thumbDataUrl: dataUrl,
-          meta: fixed
+          meta: fixed,
         };
         await saveHistoryItem(box);
         return box;
@@ -246,7 +260,7 @@ export default function App() {
           filename: file.name,
           fileType,
           createdAt: Date.now(),
-          error: msg
+          error: msg,
         };
         await saveHistoryItem(box);
         return box;
@@ -264,14 +278,18 @@ export default function App() {
     setFiles([]);
   }
 
-  // ----- per-item helpers (edit, copy, tidy, regenerate) -----
-  function copy(text: string) { void navigator.clipboard.writeText(text || ''); }
+  /* ----- per-item helpers (edit, copy, tidy, add, regenerate) ----- */
+  function copy(text: string) {
+    void navigator.clipboard.writeText(text || '');
+  }
   function patchItem(id: string, patch: Partial<ItemMetaBox>) {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }
   function patchItemMeta(id: string, patch: Partial<MetaOutput>) {
     setItems((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, meta: { ...(it.meta || { title: '', description: '', keywords: '' }), ...patch } } : it))
+      prev.map((it) =>
+        it.id === id ? { ...it, meta: { ...(it.meta || { title: '', description: '', keywords: '' }), ...patch } } : it
+      )
     );
   }
   async function saveEdits(id: string) {
@@ -286,36 +304,6 @@ export default function App() {
     patchItem(it.id, next);
     await saveHistoryItem(next);
   }
-  async function regenerate(id: string) {
-    const it = items.find((x) => x.id === id);
-    if (!it?.thumbDataUrl) return;
-    setBusy(true);
-    try {
-      const instr = defaultInstruction({ fileType: it.fileType, titleLength, descriptionLength, keywordsCount, extra });
-      const instructionHash = await sha256(instr);
-      const body = { apiKey, model, instruction: instr, instructionHash, imageDataUrl: it.thumbDataUrl! };
-      const url = provider === 'openai' ? '/api/generate/openai' : '/api/generate/gemini';
-
-      const res = await withRetry(
-        () =>
-          fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-            .then(async (r) => { if (!r.ok) throw new Error((await r.text()) || `HTTP ${r.status}`); return r; }),
-        3, 600
-      );
-
-      const parsed: unknown = await res.json();
-      if (!isValidMeta(parsed)) throw new Error('Model returned invalid JSON shape.');
-      const fixed: MetaOutput = { title: parsed.title, description: parsed.description, keywords: cleanKeywords(parsed.keywords, keywordsCount) };
-      const updated: ItemMetaBox = { ...it, meta: fixed, error: undefined };
-      patchItem(id, updated);
-      await saveHistoryItem(updated);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      patchItem(id, { error: msg });
-    } finally { setBusy(false); }
-  }
-
-  // ---- keyword chip DnD (on Results cards) ----
   function onChipDrop(itemId: string, from: number, to: number) {
     const it = items.find((x) => x.id === itemId);
     if (!it?.meta) return;
@@ -326,10 +314,70 @@ export default function App() {
     const joined = arr.join(', ');
     patchItemMeta(itemId, { keywords: joined });
   }
+  function addKeyword(itemId: string) {
+    const it = items.find((x) => x.id === itemId);
+    const kw = (newKw[itemId] || '').trim();
+    if (!it || !kw) return;
+    const arr = parseKeywords(it.meta?.keywords || '');
+    const lower = new Set(arr.map((s) => s.toLowerCase()));
+    if (lower.has(kw.toLowerCase())) {
+      setNewKw((s) => ({ ...s, [itemId]: '' }));
+      return;
+    }
+    arr.push(kw);
+    patchItemMeta(itemId, { keywords: arr.join(', ') });
+    setNewKw((s) => ({ ...s, [itemId]: '' }));
+  }
+  async function regenerate(id: string) {
+    const it = items.find((x) => x.id === id);
+    if (!it?.thumbDataUrl) return;
+    setBusy(true);
+    try {
+      const instr = defaultInstruction({
+        fileType: it.fileType,
+        titleLength,
+        descriptionLength,
+        keywordsCount,
+        extra,
+      });
+      const instructionHash = await sha256(instr);
+      const body = { apiKey, model, instruction: instr, instructionHash, imageDataUrl: it.thumbDataUrl };
+      const url = provider === 'openai' ? '/api/generate/openai' : '/api/generate/gemini';
 
+      const res = await withRetry(
+        () =>
+          fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          }).then(async (r) => {
+            if (!r.ok) throw new Error((await r.text()) || `HTTP ${r.status}`);
+            return r;
+          }),
+        3,
+        600
+      );
+
+      const parsed: unknown = await res.json();
+      if (!isValidMeta(parsed)) throw new Error('Model returned invalid JSON shape.');
+      const fixed: MetaOutput = {
+        title: parsed.title,
+        description: parsed.description,
+        keywords: cleanKeywords(parsed.keywords, keywordsCount),
+      };
+      const updated: ItemMetaBox = { ...it, meta: fixed, error: undefined };
+      patchItem(id, updated);
+      await saveHistoryItem(updated);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      patchItem(id, { error: msg });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /* ----- history selection helpers ----- */
   const totalPages = Math.ceil(hist.total / pageSize);
-
-  // ----- UI helpers for History selection -----
   const selectedCount = selectedIds.size;
   const allSelectable = hist.items.filter((i) => !i.error);
   const allSelected = selectedCount > 0 && selectedCount === allSelectable.length;
@@ -349,11 +397,7 @@ export default function App() {
       return next;
     });
   }
-
-  const selectedItems = useMemo(
-    () => hist.items.filter((it) => selectedIds.has(it.id)),
-    [hist.items, selectedIds]
-  );
+  const selectedItems = useMemo(() => hist.items.filter((it) => selectedIds.has(it.id)), [hist.items, selectedIds]);
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
@@ -366,35 +410,33 @@ export default function App() {
       <Tabs value={tab} onValueChange={(v) => setTab(v as 'generate' | 'history')}>
         <TabsList
           className="grid grid-cols-2 w-full md:w-auto p-1 rounded-xl
-                    bg-neutral-800/80 border border-neutral-700
-                    text-neutral-200"
+                     bg-neutral-800/80 border border-neutral-700
+                     text-neutral-200"
         >
           <TabsTrigger
             value="generate"
             className="rounded-lg px-4 py-2 transition
-                      !text-neutral-200 hover:!text-white
-                      data-[state=active]:!bg-purple-600
-                      data-[state=active]:!text-white
-                      data-[state=active]:shadow-sm"
+                       !text-neutral-200 hover:!text-white
+                       data-[state=active]:!bg-purple-600
+                       data-[state=active]:!text-white
+                       data-[state=active]:shadow-sm"
           >
             Generate
           </TabsTrigger>
           <TabsTrigger
             value="history"
             className="rounded-lg px-4 py-2 transition
-                      !text-neutral-200 hover:!text-white
-                      data-[state=active]:!bg-purple-600
-                      data-[state=active]:!text-white
-                      data-[state=active]:shadow-sm"
+                       !text-neutral-200 hover:!text-white
+                       data-[state=active]:!bg-purple-600
+                       data-[state=active]:!text-white
+                       data-[state=active]:shadow-sm"
           >
             <HistoryIcon className="w-4 h-4 mr-1" />
             History
           </TabsTrigger>
         </TabsList>
 
-
-
-        {/* GENERATE TAB */}
+        {/* ============== GENERATE TAB ============== */}
         <TabsContent value="generate" className="space-y-6">
           {/* Provider/Model */}
           <Card className="bg-neutral-950 border-neutral-800">
@@ -422,7 +464,9 @@ export default function App() {
                   </SelectTrigger>
                   <SelectContent className="bg-neutral-900 border-neutral-800 text-neutral-100">
                     {(provider === 'openai' ? OPENAI_MODELS : GEMINI_MODELS).map((m) => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -458,7 +502,9 @@ export default function App() {
               <div>
                 <Label className="text-neutral-300">File type</Label>
                 <Select value={fileType} onValueChange={(v) => setFileType(v as FileType)}>
-                  <SelectTrigger className="bg-neutral-900 border-neutral-800 text-neutral-100"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-neutral-900 border-neutral-800 text-neutral-100">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent className="bg-neutral-900 border-neutral-800 text-neutral-100">
                     <SelectItem value="photo">Photo</SelectItem>
                     <SelectItem value="illustration">Illustration</SelectItem>
@@ -470,23 +516,46 @@ export default function App() {
               </div>
               <div>
                 <Label className="text-neutral-300">Title length (chars)</Label>
-                <Input type="number" min={20} max={80} value={titleLength} onChange={(e) => setTitleLength(parseInt(e.target.value || '60', 10))}
-                  className="bg-neutral-900 border-neutral-800 text-neutral-100" />
+                <Input
+                  type="number"
+                  min={20}
+                  max={80}
+                  value={titleLength}
+                  onChange={(e) => setTitleLength(parseInt(e.target.value || '60', 10))}
+                  className="bg-neutral-900 border-neutral-800 text-neutral-100"
+                />
               </div>
               <div>
                 <Label className="text-neutral-300">Description length (words)</Label>
-                <Input type="number" min={20} max={120} value={descriptionLength} onChange={(e) => setDescriptionLength(parseInt(e.target.value || '60', 10))}
-                  className="bg-neutral-900 border-neutral-800 text-neutral-100" />
+                <Input
+                  type="number"
+                  min={20}
+                  max={120}
+                  value={descriptionLength}
+                  onChange={(e) => setDescriptionLength(parseInt(e.target.value || '60', 10))}
+                  className="bg-neutral-900 border-neutral-800 text-neutral-100"
+                />
               </div>
               <div>
                 <Label className="text-neutral-300">Keywords count</Label>
-                <Input type="number" min={5} max={50} value={keywordsCount} onChange={(e) => setKeywordsCount(parseInt(e.target.value || '49', 10))}
-                  className="bg-neutral-900 border-neutral-800 text-neutral-100" />
+                <Input
+                  type="number"
+                  min={5}
+                  max={50}
+                  value={keywordsCount}
+                  onChange={(e) => setKeywordsCount(parseInt(e.target.value || '49', 10))}
+                  className="bg-neutral-900 border-neutral-800 text-neutral-100"
+                />
               </div>
               <div className="md:col-span-2">
                 <Label className="text-neutral-300">Extra instructions</Label>
-                <Textarea rows={3} value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="Add any project-specific guidance here..."
-                  className="bg-neutral-900 border-neutral-800 text-neutral-100" />
+                <Textarea
+                  rows={3}
+                  value={extra}
+                  onChange={(e) => setExtra(e.target.value)}
+                  placeholder="Add any project-specific guidance here..."
+                  className="bg-neutral-900 border-neutral-800 text-neutral-100"
+                />
               </div>
             </CardContent>
           </Card>
@@ -500,22 +569,36 @@ export default function App() {
               <div className="border border-neutral-800 rounded-2xl p-6 text-neutral-300 text-center bg-neutral-900/50">
                 Drag & drop images here or
                 <div className="mt-3">
-                  <FilePicker onPick={(fl) => setFiles((prev) => [...prev, ...fl.filter((f) => f.type.startsWith('image/'))])} />
+                  <FilePicker
+                    onPick={(fl) => setFiles((prev) => [...prev, ...fl.filter((f) => f.type.startsWith('image/'))])}
+                  />
                 </div>
               </div>
               {!!files.length && (
                 <div className="text-sm text-neutral-300">
                   <strong className="text-neutral-100">{files.length}</strong> file(s) selected:
-                  <ul className="list-disc list-inside mt-1 space-y-0.5">{files.map((f) => (<li key={f.name}>{f.name}</li>))}</ul>
+                  <ul className="list-disc list-inside mt-1 space-y-0.5">
+                    {files.map((f) => (
+                      <li key={f.name}>{f.name}</li>
+                    ))}
+                  </ul>
                   <div className="text-xs mt-2 text-neutral-400">(Previews are hidden until metadata is generated)</div>
                 </div>
               )}
               <div className="flex gap-2 items-center">
-                <Button disabled={!files.length || busy} onClick={runGeneration} className="bg-purple-600 hover:bg-purple-500 text-white">
+                <Button
+                  disabled={!files.length || busy}
+                  onClick={runGeneration}
+                  className="bg-purple-600 hover:bg-purple-500 text-white"
+                >
                   Generate metadata
                 </Button>
                 {busy && <Progress value={progress} className="w-56 bg-neutral-900" />}
-                {busy && <span className="text-sm text-neutral-400">{Math.round(progress)}% | {Math.round((progress / 100) * files.length)} / {files.length}</span>}
+                {busy && (
+                  <span className="text-sm text-neutral-400">
+                    {Math.round(progress)}% | {Math.round((progress / 100) * files.length)} / {files.length}
+                  </span>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -528,11 +611,46 @@ export default function App() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex gap-2 flex-wrap">
-                  <Button variant="secondary" className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700" onClick={() => downloadAgencyCSV('adobe', items)}><Download className="w-4 h-4 mr-2" />Adobe CSV</Button>
-                  <Button variant="secondary" className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700" onClick={() => downloadAgencyCSV('shutterstock', items)}><Download className="w-4 h-4 mr-2" />Shutterstock CSV</Button>
-                  <Button variant="secondary" className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700" onClick={() => downloadAgencyCSV('vecteezy', items)}><Download className="w-4 h-4 mr-2" />Vecteezy CSV</Button>
-                  <Button variant="secondary" className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700" onClick={() => downloadAgencyCSV('freepik', items)}><Download className="w-4 h-4 mr-2" />Freepik CSV</Button>
-                  <Button variant="secondary" className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700" onClick={() => downloadAgencyCSV('dreamstime', items)}><Download className="w-4 h-4 mr-2" />Dreamstime CSV</Button>
+                  <Button
+                    variant="secondary"
+                    className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700"
+                    onClick={() => downloadAgencyCSV('adobe', items)}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Adobe CSV
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700"
+                    onClick={() => downloadAgencyCSV('shutterstock', items)}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Shutterstock CSV
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700"
+                    onClick={() => downloadAgencyCSV('vecteezy', items)}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Vecteezy CSV
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700"
+                    onClick={() => downloadAgencyCSV('freepik', items)}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Freepik CSV
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700"
+                    onClick={() => downloadAgencyCSV('dreamstime', items)}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Dreamstime CSV
+                  </Button>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-4">
@@ -540,7 +658,11 @@ export default function App() {
                     <div key={it.id} className="rounded-2xl border border-neutral-800 overflow-hidden bg-neutral-900/50">
                       <div className="flex gap-3 p-3 items-center bg-gradient-to-r from-purple-950/50 to-neutral-950">
                         <div className="w-16 h-16 bg-neutral-800 rounded-lg overflow-hidden flex items-center justify-center">
-                          {it.thumbDataUrl ? (<img alt="" src={it.thumbDataUrl} className="object-cover w-full h-full" />) : (<span className="text-xs text-neutral-500">No preview</span>)}
+                          {it.thumbDataUrl ? (
+                            <img alt="" src={it.thumbDataUrl} className="object-cover w-full h-full" />
+                          ) : (
+                            <span className="text-xs text-neutral-500">No preview</span>
+                          )}
                         </div>
                         <div className="min-w-0">
                           <div className="font-medium truncate text-neutral-100">{it.filename}</div>
@@ -559,12 +681,22 @@ export default function App() {
                               <div className="flex items-center justify-between">
                                 <span className="font-semibold text-neutral-100">Title</span>
                                 <div className="shrink-0 flex gap-2">
-                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => copy(it.meta?.title || '')} title="Copy title"><Copy className="w-4 h-4" /></Button>
-                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => saveEdits(it.id)} title="Save edits"><Save className="w-4 h-4" /></Button>
-                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => regenerate(it.id)} title="Regenerate"><RotateCw className="w-4 h-4" /></Button>
+                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => copy(it.meta?.title || '')} title="Copy title">
+                                    <Copy className="w-4 h-4" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => saveEdits(it.id)} title="Save edits">
+                                    <Save className="w-4 h-4" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => regenerate(it.id)} title="Regenerate">
+                                    <RotateCw className="w-4 h-4" />
+                                  </Button>
                                 </div>
                               </div>
-                              <Input className="bg-neutral-900 border-neutral-700 text-neutral-100" value={it.meta?.title || ''} onChange={(e) => patchItemMeta(it.id, { title: e.target.value })} />
+                              <Input
+                                className="bg-neutral-900 border-neutral-700 text-neutral-100"
+                                value={it.meta?.title || ''}
+                                onChange={(e) => patchItemMeta(it.id, { title: e.target.value })}
+                              />
                             </div>
 
                             {/* Description */}
@@ -572,22 +704,39 @@ export default function App() {
                               <div className="flex items-center justify-between">
                                 <span className="font-semibold text-neutral-100">Desc</span>
                                 <div className="shrink-0 flex gap-2">
-                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => copy(it.meta?.description || '')} title="Copy description"><Copy className="w-4 h-4" /></Button>
-                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => saveEdits(it.id)} title="Save edits"><Save className="w-4 h-4" /></Button>
-                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => regenerate(it.id)} title="Regenerate"><RotateCw className="w-4 h-4" /></Button>
+                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => copy(it.meta?.description || '')} title="Copy description">
+                                    <Copy className="w-4 h-4" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => saveEdits(it.id)} title="Save edits">
+                                    <Save className="w-4 h-4" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => regenerate(it.id)} title="Regenerate">
+                                    <RotateCw className="w-4 h-4" />
+                                  </Button>
                                 </div>
                               </div>
-                              <Textarea rows={3} className="bg-neutral-900 border-neutral-700 text-neutral-100" value={it.meta?.description || ''} onChange={(e) => patchItemMeta(it.id, { description: e.target.value })} />
+                              <Textarea
+                                rows={3}
+                                className="bg-neutral-900 border-neutral-700 text-neutral-100"
+                                value={it.meta?.description || ''}
+                                onChange={(e) => patchItemMeta(it.id, { description: e.target.value })}
+                              />
                             </div>
 
-                            {/* Keywords + chips */}
+                            {/* Keywords (chips + add box) */}
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
                                 <span className="font-semibold text-neutral-100">Keywords</span>
                                 <div className="shrink-0 flex gap-2">
-                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => tidyKeywords(it.id)} title="Tidy keywords"><Wand2 className="w-4 h-4" /></Button>
-                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => copy(it.meta?.keywords || '')} title="Copy keywords"><Copy className="w-4 h-4" /></Button>
-                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => saveEdits(it.id)} title="Save edits"><Save className="w-4 h-4" /></Button>
+                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => tidyKeywords(it.id)} title="Tidy keywords">
+                                    <Wand2 className="w-4 h-4" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => copy(it.meta?.keywords || '')} title="Copy keywords">
+                                    <Copy className="w-4 h-4" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => saveEdits(it.id)} title="Save edits">
+                                    <Save className="w-4 h-4" />
+                                  </Button>
                                 </div>
                               </div>
 
@@ -623,9 +772,32 @@ export default function App() {
                                 ))}
                               </div>
 
-                              <Textarea rows={3} className="bg-neutral-900 border-neutral-700 text-neutral-100"
-                                value={it.meta?.keywords || ''} onChange={(e) => patchItemMeta(it.id, { keywords: e.target.value })} />
-                              <div className="text-xs text-neutral-400">{(it.meta?.keywords || '').split(',').filter(Boolean).length} keyword(s)</div>
+                              {/* Small input + plus to add a new keyword */}
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  placeholder="Add keyword"
+                                  value={newKw[it.id] || ''}
+                                  onChange={(e) => setNewKw((s) => ({ ...s, [it.id]: e.target.value }))}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      addKeyword(it.id);
+                                    }
+                                  }}
+                                  className="h-8 w-48 bg-neutral-900 border-neutral-700 text-neutral-100"
+                                />
+                                <Button
+                                  size="icon"
+                                  onClick={() => addKeyword(it.id)}
+                                  className="h-8 w-8 bg-purple-600 hover:bg-purple-500 text-white"
+                                  title="Add keyword"
+                                >
+                                  <Plus className="w-4 h-4" />
+                                </Button>
+                                <span className="text-xs text-neutral-400 ml-2">
+                                  {parseKeywords(it.meta?.keywords || '').length} keyword(s)
+                                </span>
+                              </div>
                             </div>
                           </>
                         )}
@@ -638,15 +810,17 @@ export default function App() {
           )}
         </TabsContent>
 
-        {/* HISTORY TAB */}
+        {/* ============== HISTORY TAB ============== */}
         <TabsContent value="history" className="space-y-4">
           <Card className="bg-neutral-950 border-neutral-800">
             <CardHeader className="bg-neutral-900 rounded-t-2xl">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-neutral-100">History</CardTitle>
                 <div className="flex items-center gap-2 text-sm text-neutral-300">
-                  <button className="flex items-center gap-1 px-3 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700"
-                          onClick={toggleSelectAll}>
+                  <button
+                    className="flex items-center gap-1 px-3 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700"
+                    onClick={toggleSelectAll}
+                  >
                     {allSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
                     {allSelected ? 'Unselect all' : 'Select all'}
                   </button>
@@ -658,11 +832,19 @@ export default function App() {
             <CardContent className="space-y-4">
               {/* Export buttons */}
               <div className="flex gap-2 flex-wrap">
-                <Button variant="secondary" className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700" onClick={() => downloadAgencyCSV('adobe', hist.items)}>
+                <Button
+                  variant="secondary"
+                  className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700"
+                  onClick={() => downloadAgencyCSV('adobe', hist.items)}
+                >
                   <Download className="w-4 h-4 mr-2" /> Export page → Adobe CSV
                 </Button>
-                <Button disabled={!selectedItems.length} variant="secondary" className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700 disabled:opacity-50"
-                        onClick={() => downloadAgencyCSV('adobe', selectedItems)}>
+                <Button
+                  disabled={!selectedItems.length}
+                  variant="secondary"
+                  className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700 disabled:opacity-50"
+                  onClick={() => downloadAgencyCSV('adobe', selectedItems)}
+                >
                   <Download className="w-4 h-4 mr-2" /> Export selected → Adobe CSV
                 </Button>
 
@@ -699,14 +881,26 @@ export default function App() {
                 {hist.items.map((it) => {
                   const checked = selectedIds.has(it.id);
                   return (
-                    <div key={it.id} className={`rounded-2xl border border-neutral-800 overflow-hidden bg-neutral-900/50 ${checked ? 'ring-2 ring-purple-500/40' : ''}`}>
+                    <div
+                      key={it.id}
+                      className={`rounded-2xl border border-neutral-800 overflow-hidden bg-neutral-900/50 ${
+                        checked ? 'ring-2 ring-purple-500/40' : ''
+                      }`}
+                    >
                       <div className="flex gap-3 p-3 items-center bg-gradient-to-r from-purple-950/50 to-neutral-950">
-                        <button className="p-2 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700"
-                                onClick={() => toggleSelect(it.id)} aria-pressed={checked}>
+                        <button
+                          className="p-2 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700"
+                          onClick={() => toggleSelect(it.id)}
+                          aria-pressed={checked}
+                        >
                           {checked ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
                         </button>
                         <div className="w-16 h-16 bg-neutral-800 rounded-lg overflow-hidden flex items-center justify-center">
-                          {it.thumbDataUrl ? (<img alt="" src={it.thumbDataUrl} className="object-cover w-full h-full" />) : (<span className="text-xs text-neutral-500">No preview</span>)}
+                          {it.thumbDataUrl ? (
+                            <img alt="" src={it.thumbDataUrl} className="object-cover w-full h-full" />
+                          ) : (
+                            <span className="text-xs text-neutral-500">No preview</span>
+                          )}
                         </div>
                         <div className="min-w-0">
                           <div className="font-medium truncate text-neutral-100">{it.filename}</div>
@@ -724,21 +918,27 @@ export default function App() {
                               <div className="font-semibold min-w-[70px] text-neutral-100">Title</div>
                               <div className="flex-1 text-neutral-200">{it.meta?.title}</div>
                               <div className="shrink-0">
-                                <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => copy(it.meta?.title || '')} title="Copy title"><Copy className="w-4 h-4" /></Button>
+                                <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => copy(it.meta?.title || '')} title="Copy title">
+                                  <Copy className="w-4 h-4" />
+                                </Button>
                               </div>
                             </div>
                             <div className="flex items-start gap-2">
                               <div className="font-semibold min-w-[70px] text-neutral-100">Desc</div>
                               <div className="flex-1 text-neutral-300">{it.meta?.description}</div>
                               <div className="shrink-0">
-                                <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => copy(it.meta?.description || '')} title="Copy description"><Copy className="w-4 h-4" /></Button>
+                                <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => copy(it.meta?.description || '')} title="Copy description">
+                                  <Copy className="w-4 h-4" />
+                                </Button>
                               </div>
                             </div>
                             <div className="flex items-start gap-2">
                               <div className="font-semibold min-w-[70px] text-neutral-100">Keywords</div>
                               <div className="flex-1 text-neutral-300 break-words">{it.meta?.keywords}</div>
                               <div className="shrink-0">
-                                <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => copy(it.meta?.keywords || '')} title="Copy keywords"><Copy className="w-4 h-4" /></Button>
+                                <Button size="icon" variant="ghost" className="text-neutral-200" onClick={() => copy(it.meta?.keywords || '')} title="Copy keywords">
+                                  <Copy className="w-4 h-4" />
+                                </Button>
                               </div>
                             </div>
                           </>
@@ -752,9 +952,16 @@ export default function App() {
               {totalPages > 1 && (
                 <div className="flex justify-center gap-2 pt-2">
                   {Array.from({ length: totalPages }).map((_, i) => (
-                    <Button key={i} variant={i === histPage ? 'default' : 'secondary'}
+                    <Button
+                      key={i}
+                      variant={i === histPage ? 'default' : 'secondary'}
                       onClick={() => setHistPage(i)}
-                      className={`border ${i===histPage ? 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500/50' : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border-neutral-700'}`}>
+                      className={`border ${
+                        i === histPage
+                          ? 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500/50'
+                          : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border-neutral-700'
+                      }`}
+                    >
                       {i + 1}
                     </Button>
                   ))}
