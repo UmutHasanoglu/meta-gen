@@ -1,0 +1,6 @@
+{
+  "functions": {
+    "app/api/generate/openai/route.ts": { "runtime": "edge", "regions": ["fra1"] },
+    "app/api/generate/gemini/route.ts": { "runtime": "edge", "regions": ["fra1"] }
+  }
+}
