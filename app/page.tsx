@@ -31,7 +31,7 @@ import { cleanKeywords, parseKeywords } from '@/lib/keywords';
 import type { FileType, ItemMetaBox, MetaOutput } from '@/lib/types';
 
 /* ---------- constants ---------- */
-const OPENAI_MODELS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1'];
+const OPENAI_MODELS = ['gpt-4.1', 'gpt-4o', 'gpt-4o-mini', 'gpt-5-mini'];
 const GEMINI_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
 const DEFAULT_EXTRA = '';
 
