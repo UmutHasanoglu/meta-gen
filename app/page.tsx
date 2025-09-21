@@ -58,9 +58,9 @@ function defaultInstruction(opts: {
    - **Details:** Identify activities (e.g., run, jump), roles (e.g., mother, colleague), and expressions (e.g., smile). Be inclusive and factual.
 
 3. **Guidelines for Other Asset Categories**
-   - **Objects:** Use specific singular nouns (e.g., armchair). Describe patterns, colors, and arrangements. Add "no people" if applicable.
+   - **Objects:** Use specific singular nouns (e.g., armchair). Describe patterns, colors, and arrangements.
    - **Animals:** Use specific species names. Include number, gender, or age if relevant.
-   - **Places:** Mention specific locations (e.g., Eiffel Tower, Paris). Describe the setting (urban, rural, season, weather).
+   - **Places:** Describe the setting (urban, rural, season, weather).
    - **Plants & Flowers:** Use specific names (e.g., marigold). Describe appearance (blooming, dewy) and parts (petal, stem).
    - **Food & Drinks:** Use specific singular nouns (e.g., pizza). Describe taste, texture, or cultural significance.
    - **Illustrations & Vectors:** Specify the style (illustration, vector, 3d render). Describe the subject and theme.
