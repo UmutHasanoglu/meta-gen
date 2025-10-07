@@ -20,8 +20,17 @@ function parseDataUrl(dataUrl: string): { mime: string; base64: string } {
   return { mime: m[1], base64: m[2] };
 }
 
+/**
+ * Pauses execution for a specified number of milliseconds.
+ * @param ms The number of milliseconds to wait.
+ */
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export async function POST(req: NextRequest) {
   try {
+    // To avoid hitting the rate limit (e.g., 60 QPM for Gemini Pro Vision), we add a delay.
+    await sleep(20000); // 20-second delay
+
     const { apiKey, model, instruction, instructionHash, imageDataUrl } = (await req.json()) as {
       apiKey: string;
       model: string;
