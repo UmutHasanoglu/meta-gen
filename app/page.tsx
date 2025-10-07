@@ -155,14 +155,14 @@ function FilePicker({ onPick }: { onPick: (files: File[]) => void }) {
 
 /* ============================== PAGE ============================== */
 export default function App() {
-  const [provider, setProvider] = useState<'openai' | 'gemini'>('openai');
+  const [provider, setProvider] = useState<'openai' | 'gemini'>('gemini');
   const [model, setModel] = useState(OPENAI_MODELS[0]);
   const [apiKey, setApiKey] = useState('');
 
   const [fileType, setFileType] = useState<FileType>('photo');
-  const [titleLength, setTitleLength] = useState(60);
-  const [descriptionLength, setDescriptionLength] = useState(60);
-  const [keywordsCount, setKeywordsCount] = useState(49);
+  const [titleLength, setTitleLength] = useState(80);
+  const [descriptionLength, setDescriptionLength] = useState(40);
+  const [keywordsCount, setKeywordsCount] = useState(40);
   const [extra, setExtra] = useState(DEFAULT_EXTRA);
 
   const [files, setFiles] = useState<File[]>([]);
