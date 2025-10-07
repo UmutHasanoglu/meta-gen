@@ -29,7 +29,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export async function POST(req: NextRequest) {
   try {
     // To avoid hitting the rate limit (e.g., 60 QPM for Gemini Pro Vision), we add a delay.
-    await sleep(20000); // 20-second delay
+    await sleep(5000); // 5-second delay
 
     const { apiKey, model, instruction, instructionHash, imageDataUrl } = (await req.json()) as {
       apiKey: string;
