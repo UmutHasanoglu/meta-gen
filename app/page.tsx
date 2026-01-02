@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, useId } from 'react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -391,12 +392,16 @@ export default function App() {
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   }
   function toggleSelectAll() {
-    setSelectedIds((prev) => {
+    setSelectedIds(() => {
       if (allSelected) return new Set();
       const next = new Set<string>();
       for (const it of allSelectable) next.add(it.id);
@@ -665,7 +670,7 @@ export default function App() {
                       <div className="flex gap-3 p-3 items-center bg-gradient-to-r from-purple-950/50 to-neutral-950">
                         <div className="w-16 h-16 bg-neutral-800 rounded-lg overflow-hidden flex items-center justify-center">
                           {it.thumbDataUrl ? (
-                            <img alt="" src={it.thumbDataUrl} className="object-cover w-full h-full" />
+                            <Image alt="" src={it.thumbDataUrl} width={64} height={64} className="object-cover w-full h-full" unoptimized />
                           ) : (
                             <span className="text-xs text-neutral-500">No preview</span>
                           )}
@@ -902,7 +907,7 @@ export default function App() {
                         </button>
                         <div className="w-16 h-16 bg-neutral-800 rounded-lg overflow-hidden flex items-center justify-center">
                           {it.thumbDataUrl ? (
-                            <img alt="" src={it.thumbDataUrl} className="object-cover w-full h-full" />
+                            <Image alt="" src={it.thumbDataUrl} width={64} height={64} className="object-cover w-full h-full" unoptimized />
                           ) : (
                             <span className="text-xs text-neutral-500">No preview</span>
                           )}
