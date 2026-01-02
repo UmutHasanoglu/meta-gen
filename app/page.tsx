@@ -166,15 +166,9 @@ export default function App() {
   const [apiKey, setApiKey] = useState('');
 
   const [fileType, setFileType] = useState<FileType>('photo');
-<<<<<<< HEAD
-  const [titleLength, setTitleLength] = useState(80);
-  const [descriptionLength, setDescriptionLength] = useState(40);
-  const [keywordsCount, setKeywordsCount] = useState(40);
-=======
   const [titleLength, setTitleLength] = useState(70);
   const [descriptionLength, setDescriptionLength] = useState(60);
   const [keywordsCount, setKeywordsCount] = useState(35);
->>>>>>> e0c9f99 (Update Gemini and OpenAI models to latest versions (Jan 2026))
   const [extra, setExtra] = useState(DEFAULT_EXTRA);
 
   const [files, setFiles] = useState<File[]>([]);
