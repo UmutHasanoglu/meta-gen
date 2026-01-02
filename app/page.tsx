@@ -31,8 +31,14 @@ import { cleanKeywords, parseKeywords } from '@/lib/keywords';
 import type { FileType, ItemMetaBox, MetaOutput } from '@/lib/types';
 
 /* ---------- constants ---------- */
-const OPENAI_MODELS = ['gpt-4.1', 'gpt-4o', 'gpt-4o-mini', 'gpt-5-mini'];
-const GEMINI_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+const OPENAI_MODELS = ['gpt-5.2', 'gpt-5.1', 'gpt-5', 'o4-mini', 'o3', 'o3-mini', 'gpt-4o', 'gpt-4.1'];
+const GEMINI_MODELS = [
+  'gemini-3-pro-preview',
+  'gemini-3-flash-preview',
+  'gemini-2.5-pro',
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+];
 const DEFAULT_EXTRA = '';
 
 /* ---------- instruction text ---------- */
@@ -160,9 +166,15 @@ export default function App() {
   const [apiKey, setApiKey] = useState('');
 
   const [fileType, setFileType] = useState<FileType>('photo');
+<<<<<<< HEAD
   const [titleLength, setTitleLength] = useState(80);
   const [descriptionLength, setDescriptionLength] = useState(40);
   const [keywordsCount, setKeywordsCount] = useState(40);
+=======
+  const [titleLength, setTitleLength] = useState(70);
+  const [descriptionLength, setDescriptionLength] = useState(60);
+  const [keywordsCount, setKeywordsCount] = useState(35);
+>>>>>>> e0c9f99 (Update Gemini and OpenAI models to latest versions (Jan 2026))
   const [extra, setExtra] = useState(DEFAULT_EXTRA);
 
   const [files, setFiles] = useState<File[]>([]);
@@ -883,9 +895,8 @@ export default function App() {
                   return (
                     <div
                       key={it.id}
-                      className={`rounded-2xl border border-neutral-800 overflow-hidden bg-neutral-900/50 ${
-                        checked ? 'ring-2 ring-purple-500/40' : ''
-                      }`}
+                      className={`rounded-2xl border border-neutral-800 overflow-hidden bg-neutral-900/50 ${checked ? 'ring-2 ring-purple-500/40' : ''
+                        }`}
                     >
                       <div className="flex gap-3 p-3 items-center bg-gradient-to-r from-purple-950/50 to-neutral-950">
                         <button
@@ -956,11 +967,10 @@ export default function App() {
                       key={i}
                       variant={i === histPage ? 'default' : 'secondary'}
                       onClick={() => setHistPage(i)}
-                      className={`border ${
-                        i === histPage
-                          ? 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500/50'
-                          : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border-neutral-700'
-                      }`}
+                      className={`border ${i === histPage
+                        ? 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500/50'
+                        : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border-neutral-700'
+                        }`}
                     >
                       {i + 1}
                     </Button>

@@ -41,13 +41,13 @@ export function downloadAgencyCSV(agency: Agency, items: ItemMetaBox[]) {
         Releases: ''
       }));
       break;
+      break;
 
     case 'shutterstock':
-      headers = ['Filename','Title','Description','Keywords'];
+      headers = ['Filename','Description','Keywords'];
       rows = items.map(it => ({
         Filename: it.filename,
-        Title: it.meta?.title ?? '',
-        Description: it.meta?.description ?? '',
+        Description: it.meta?.title ?? '',
         Keywords: it.meta?.keywords ?? ''
       }));
       break;
@@ -72,9 +72,10 @@ export function downloadAgencyCSV(agency: Agency, items: ItemMetaBox[]) {
       break;
 
     case 'dreamstime':
-      headers = ['filename','description','keywords'];
+      headers = ['filename','title','description','keywords'];
       rows = items.map(it => ({
         filename: it.filename,
+		title: it.meta?.title ?? '',
         description: it.meta?.description ?? '',
         keywords: (it.meta?.keywords ?? '').replace(/,\s+/g, ',')
       }));
