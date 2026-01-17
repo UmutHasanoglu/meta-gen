@@ -160,7 +160,6 @@ function FilePicker({ onPick }: { onPick: (files: File[]) => void }) {
   );
 }
 
-/* ------------------------------ PAGE ------------------------------ */
 export default function App() {
   const [provider, setProvider] = useState<'openai' | 'gemini'>('gemini');
   const [model, setModel] = useState(OPENAI_MODELS[0]);
@@ -447,7 +446,6 @@ export default function App() {
           </TabsTrigger>
         </TabsList>
 
-        {/* --------------- GENERATE TAB --------------- */}
         <TabsContent value="generate" className="space-y-6">
           {/* Provider/Model */}
           <Card className="bg-neutral-950 border-neutral-800">
@@ -821,7 +819,6 @@ export default function App() {
           )}
         </TabsContent>
 
-        {/* ---------------- HISTORY TAB ---------------- */}
         <TabsContent value="history" className="space-y-4">
           <Card className="bg-neutral-950 border-neutral-800">
             <CardHeader className="bg-neutral-900 rounded-t-2xl">
