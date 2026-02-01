@@ -37,10 +37,9 @@ export function downloadAgencyCSV(agency: Agency, items: ItemMetaBox[]) {
         Filename: it.filename,
         Title: it.meta?.title ?? '',
         Keywords: it.meta?.keywords ?? '',
-        Category: '',
-        Releases: ''
+        Category: it.meta?.category ?? '',
+        Releases: it.meta?.releases ?? ''
       }));
-      break;
       break;
 
     case 'shutterstock':

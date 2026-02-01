@@ -1,18 +1,38 @@
 import { NextRequest } from 'next/server';
 export const runtime = 'edge';
 
+// Allowed models for Gemini
+const ALLOWED_MODELS = [
+  'gemini-3-pro-preview', 'gemini-3-flash-preview',
+  'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite',
+  'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'
+];
+
 // Strict JSON schema for the response
 const responseSchema = {
   type: 'OBJECT',
   properties: {
     title: { type: 'STRING' },
     description: { type: 'STRING' },
-    keywords: { type: 'STRING' } // comma-separated
+    keywords: { type: 'STRING' }
   },
   required: ['title', 'description', 'keywords']
 } as const;
 
 const instructionCache = new Map<string, string>();
+
+function isValidApiKey(key: string): boolean {
+  // Gemini keys start with 'AIza' and are typically 39 chars
+  return typeof key === 'string' && key.startsWith('AIza') && key.length >= 30;
+}
+
+function isValidDataUrl(url: string): boolean {
+  return typeof url === 'string' && /^data:image\/[a-z]+;base64,/i.test(url);
+}
+
+function isValidModel(model: string): boolean {
+  return typeof model === 'string' && ALLOWED_MODELS.includes(model);
+}
 
 function parseDataUrl(dataUrl: string): { mime: string; base64: string } {
   const m = /^data:([^;]+);base64,(.*)$/i.exec(dataUrl);
@@ -20,29 +40,43 @@ function parseDataUrl(dataUrl: string): { mime: string; base64: string } {
   return { mime: m[1], base64: m[2] };
 }
 
-/**
- * Pauses execution for a specified number of milliseconds.
- * @param ms The number of milliseconds to wait.
- */
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function POST(req: NextRequest) {
   try {
-    // To avoid hitting the rate limit (e.g., 60 QPM for Gemini Pro Vision), we add a delay.
-    await sleep(5000); // 5-second delay
+    // Rate limit delay
+    await sleep(5000);
 
-    const { apiKey, model, instruction, instructionHash, imageDataUrl } = (await req.json()) as {
+    const body = await req.json();
+    const { apiKey, model, instruction, instructionHash, imageDataUrl } = body as {
       apiKey: string;
       model: string;
       instruction?: string;
       instructionHash?: string;
-      imageDataUrl: string; // data URL
+      imageDataUrl: string;
     };
 
-    if (!apiKey) return new Response('Missing apiKey', { status: 400 });
-    if (!model) return new Response('Missing model', { status: 400 });
-    if (!imageDataUrl) return new Response('Missing imageDataUrl', { status: 400 });
+    // Input validation
+    if (!apiKey) {
+      return new Response('Missing apiKey', { status: 400 });
+    }
+    if (!isValidApiKey(apiKey)) {
+      return new Response('Invalid API key format', { status: 400 });
+    }
+    if (!model) {
+      return new Response('Missing model', { status: 400 });
+    }
+    if (!isValidModel(model)) {
+      return new Response(`Invalid model. Allowed: ${ALLOWED_MODELS.join(', ')}`, { status: 400 });
+    }
+    if (!imageDataUrl) {
+      return new Response('Missing imageDataUrl', { status: 400 });
+    }
+    if (!isValidDataUrl(imageDataUrl)) {
+      return new Response('Invalid image data URL format', { status: 400 });
+    }
 
+    // Cache instruction for batch processing
     if (instruction && instructionHash && !instructionCache.has(instructionHash)) {
       instructionCache.set(instructionHash, instruction);
     }
@@ -85,7 +119,6 @@ export async function POST(req: NextRequest) {
       return new Response(`Gemini error (${resp.status}): ${text}`, { status: 500 });
     }
 
-    // When responseMimeType=application/json, Gemini returns JSON text in parts[0].text
     try {
       const json = JSON.parse(text) as {
         candidates?: { content?: { parts?: { text?: string; inline_data?: { data?: string } }[] } }[];
@@ -96,7 +129,6 @@ export async function POST(req: NextRequest) {
       const out = typeof candidateText === 'string' ? candidateText : text;
       return new Response(out, { headers: { 'Content-Type': 'application/json' } });
     } catch {
-      // already JSON string
       return new Response(text, { headers: { 'Content-Type': 'application/json' } });
     }
   } catch (e: unknown) {
